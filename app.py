@@ -1,4 +1,4 @@
-# Using RFC 1035: https://www.ietf.org/rfc/rfc1035.txt
+# Based on RFC 1034, RFC 1035: https://www.ietf.org/rfc/rfc1034.txt, https://www.ietf.org/rfc/rfc1035.txt
 
 import socket
 import random
@@ -17,16 +17,18 @@ query_class = '\01'  # IN = Internet class: RFC 3.2.4 ==> 0x001
 # Domain name encoding
 """
 Example:
-b'Zv \x01\x00 \x01 \x03www\x06google\x03com \x00 \x00A\x00 IN
-    Zv - This is the transaction ID: hex(transaction_id) then split to two 2 bytes segment
+b'5O \x01\x00 \x00\x01 \x00\x00 \x00\x00 \x00\x00 \x03www\x06google\x03com\x00\x00\x01\x00\x01'
+
+    50 - This is the transaction ID: hex(transaction_id) then split to two 2 bytes segment
     \x01\x00 - The DNS flags, 0x0100 indicates standard query
-    \x01 - Number of questions is 1
+    \x00\x01 - Number of questions is 1
+    3x \x00\x00 - Answer RRs, Authority RRs, Additional RRs
     \x03www\x06google\x03com - The encoded domain name www.google.com ( \x03,\x06 and \x03 Represent the length of each 
                                label in the domain name as per the DNS format specifications.)
     \x00 - Terminating null byte 
     \x00 - Terminating null byte 
         1 ) The first null byte terminates the domain name string. This is required as per DNS format to mark the end of
-         the domain name.
+         the domain name. ( If we have many domains, first one \x00 repeat end of each domain )
         2 ) The second null byte provides padding and alignment before specifying the query type and class.
     A - Query type A for IPv4 address
     \x00 - Padding byte
@@ -53,9 +55,9 @@ dns_query_packet += bytes(query, 'utf-8')
 dns_server_ip = "8.8.8.8"
 dns_server_port = 53
 
+print(dns_query_packet)
 # Create UDP socket
 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-
 # Send the dns_query_packet to the DNS server
 s.sendto(dns_query_packet, (dns_server_ip, dns_server_port))
 
@@ -68,7 +70,7 @@ dns_response, address = s.recvfrom(buffer_size)
 # Parse header
 """
 Example:
-b'B\x8a \x81\x80 \x00 \x01 \x00\x01\x00\x00\x00\x00 \x03www\x06google\x03com\x00 \x00\x01 \x00\x01 \xc0\x0c\x00\x01\x00\x01\x00\x00\x00<\x00\x04\xd8\xef&x'
+b'B\x8a \x81\x80 \x00 \x01 \x00\x01\x00\x00\x00\x00 \x03www\x06google\x03com\x00 \x00\x01 \x00\x01 \xc0\x0c \x00\x01 \x00\x01 \x00\x00\x00< \x00\x04\xd8\xef&x'
 [0:2]: ID: B81 ==> ASCII B = HEX 42      
                          2nd Byte    1st Byte
 [2:4]: Flags: 0x8180 => (1000 0001) (1000 0000)
@@ -97,23 +99,44 @@ qname_part: is domain part
 after_domain: is after domain part
 after_domain[0]: is separator between domains part and other options
 after_domain[1:3]: qtype = A = \x00 \x01
-after_domain[3:5]: qclass = IN = \x00 \x01
+after_domain[3:5]: qclass = IN = \x00 \x01                    
 """
 start_of_domain_index = 12  # Skip header
 end_index = dns_response[start_of_domain_index:].index(b'\x00')
 end_of_domain_index = start_of_domain_index + end_index
 qname_part = dns_response[start_of_domain_index:end_of_domain_index]
+qname = qname_part
 after_domain = dns_response[end_of_domain_index:]
 qtype, qclass = struct.unpack('!HH', after_domain[1:5])
 answers_index = end_of_domain_index + 5
-
+question = {
+    'qname': qname,
+    'qtype': qtype,
+    'qclass': qclass
+}
 # Parse answer RRs
+"""
+after_domain[5:7]: name = \xc0\x0c = Pointer to offset 12 to reuse/refer to that name again instead of reencoding 
+                    the full domain name.
+after_domain[7:9]: rtype = 1 for A record, 2 for NS record etc
+after_domain[9:11]: rclass = 1 for Internet (IN), other values indicate things like CHAOS or Hesiod
+after_domain[11:15] ttl = Time-to-live in seconds, provides caching guidance to the clients
+after_domain[15:17] rdlen = Length of the resource data section
+after_domain[17:21] rdata = each hex byte show one section of ip we must convert them to integer
+"""
 answers = dns_response[answers_index:]
 name, rtype, rclass, ttl, rdlen = struct.unpack('!HHHLH', answers[0:12])
 rdata = answers[12:12 + rdlen]
 ip = str(int(rdata[0])) + '.' + str(int(rdata[1])) + '.' + str(int(rdata[2])) + '.' + str(int(rdata[3]))
 print(name, rtype, rclass, ttl, rdlen, ip)
-
+answer = {
+    'name': name,
+    'rtype': rtype,
+    'rclass': rclass,
+    'ttl': ttl,
+    'rdlen': rdlen,
+    'rdata': rdata
+}
 # Construct final result
 result = {
     "id": id, "flags": flags,
@@ -121,7 +144,7 @@ result = {
     "answers": answers
 }
 
-# print(id, flags, qdcount, ancount)
+print(question, answer)
 
 # Close socket
 s.close()
