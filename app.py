@@ -1,4 +1,4 @@
 import dns
-
-ip = dns.resolve("www.gmail.com", dns_server_ip="1.1.1.1", dns_server_port=53)
-print(ip)
+from http import HTTP
+request = HTTP()
+request.get("http://example.com")
