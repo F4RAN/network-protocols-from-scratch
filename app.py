@@ -1,4 +1,5 @@
 import dns
 from http import HTTP
 request = HTTP()
-request.get("http://example.com")
+res = request.get("http://example.com")
+print(res.body)
