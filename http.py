@@ -1,5 +1,5 @@
 # Based on RFC 2606, RFC 1035: https://datatracker.ietf.org/doc/html/rfc2616
-
+import json
 import socket
 import dns
 
@@ -8,6 +8,7 @@ class Response:
     def __init__(self, header, body):
         self.header = header
         self.body = body
+        self.json = {}
         self.status = ""
         self.status_message = ""
         self.headers = {}
@@ -29,6 +30,9 @@ class Response:
     def parse_body(self, body):
         if self.headers["Content-Type"].find("text/html") != -1:
             self.body = body.decode()
+        elif self.headers["Content-Type"].find("application/json") != -1:
+            self.body = body.decode()
+            self.json = json.loads(self.body)
         else:
             self.body = body
 
@@ -56,35 +60,93 @@ class Request:
         res = Response(header, response)
         total_length = int(res.headers["Content-Length"])
         remaining_bytes = total_length - len(response)
-        chunk_count = remaining_bytes // chunk_size + 1
+        chunk_count = (remaining_bytes // chunk_size) + 1 if remaining_bytes // chunk_size != 0 else 0
         for i in range(chunk_count):
+            print(f"Remaining bytes: {remaining_bytes}")
             chunk = self.s.recv(chunk_size)
             response += chunk
+
         self.s.close()
         res.parse_body(response)
         return res
 
 
-class HTTP:
-    def get(self, host, headers=""):
-        if host.startswith("http://"):
-            host = host[7:]
+def INITIATE_HTTP(func):
+    def wrapper(*args, **kwargs):
+        if kwargs.get("headers") is None:
+            kwargs["headers"] = ""
         else:
-            Exception("Invalid URL")
+            headers = [f"{k}: {v}\r\n" for k, v in kwargs["headers"].items()]
+            kwargs["headers"] = "".join(headers)
+        host, path_params = args[0].make_host_from_url(args[1])
+        print(host, path_params)
+        ip = args[0].resolve(host)
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        ip = self.resolve(host)
+        return func(args[0], host, s, ip, path_params, **kwargs)
+    return wrapper
+
+
+class HTTP:
+    def __init__(self):
+        self.user_agent = "f4ran-browser/1.0.0"
+
+    @INITIATE_HTTP
+    def get(self, host, s, ip, path_params, headers):
         s.connect((ip, 80))
-        get_request = f"GET / HTTP/1.1\r\n" \
+        get_request = f"GET /{path_params} HTTP/1.1\r\n" \
                       f"Host: {host}\r\n" \
-                      f"User-Agent: f4ran-browser/1.0.0\r\n" \
+                      f"User-Agent: {self.user_agent}\r\n" \
                       f"Accept: */*\r\n" \
+                      f"{headers if headers else ''}"  \
                       f"\r\n"
+        print(get_request)
         request = Request(s)
         response = request.send(get_request)
-
         return response
 
+    def post(self, host, data, headers=None):
+        if headers is None:
+            headers = {}
+        host, path_params = self.make_host_from_url(host)
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+        ip = self.resolve(host)
+        converted_headers = [f"{k}: {v}" for k, v in headers.items()]
+        s.connect((ip, 80))
+        post_request = f"POST /{path_params} HTTP/1.1\r\n" \
+                       f"Host: {host}\r\n" \
+                       f"User-Agent: {self.user_agent}\r\n" \
+                       f"Accept: */*\r\n" \
+                       f"Content-Length: {len(data)}\r\n" \
+                       f"{converted_headers}" \
+                       f"\r\n" \
+                       f"{data}"
+
+        request = Request(s)
+        response = request.send(post_request)
+
+        return response
 
     def resolve(self, host):
         self.ip = dns.resolve(host)
         return self.ip
+
+    def make_host_from_url(self, host):
+        if host.startswith("http://"):
+            host = host[7:]
+            path_params = ""
+            if host.find("/") != -1:
+                parsed_url = host.split("/")
+                if len(parsed_url) > 0:
+                    host = parsed_url[0]
+                    path_params = "/".join(parsed_url[1:])
+            return host, path_params
+        else:
+            Exception("Invalid URL")
+            exit(1)
+
+    def __str__(self):
+        return f"HTTP client"
+
+    def __repr__(self):
+        return f"HTTP client"

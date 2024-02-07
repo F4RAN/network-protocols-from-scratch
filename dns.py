@@ -54,15 +54,21 @@ def resolve(domain, dns_server_ip="8.8.8.8", dns_server_port=53):
         dns_query_packet += bytes(query, 'utf-8')
         # Create UDP socket
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
         s.settimeout(10)
         # Send the dns_query_packet to the DNS server
-        s.sendto(dns_query_packet, (dns_server_ip, dns_server_port))
+        try:
+            s.sendto(dns_query_packet, (dns_server_ip, dns_server_port))
 
-        # Allow 512 bytes in response buffer
-        buffer_size = 512
+            # Allow 512 bytes in response buffer
+            buffer_size = 512
 
-        # Receive response packet from DNS server
-        dns_response, address = s.recvfrom(buffer_size)
+            # Receive response packet from DNS server
+            dns_response, address = s.recvfrom(buffer_size)
+        except socket.timeout:
+            Exception("Timeout")
+            exit(1)
+
         # Extract response record
         # Parse header
         """
