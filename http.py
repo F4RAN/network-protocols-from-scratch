@@ -58,6 +58,7 @@ class Request:
             chunk = self.s.recv(chunk_size)
 
         res = Response(header, response)
+        print(res.headers)
         total_length = int(res.headers["Content-Length"])
         remaining_bytes = total_length - len(response)
         chunk_count = (remaining_bytes // chunk_size) + 1 if remaining_bytes // chunk_size != 0 else 0
@@ -79,7 +80,6 @@ def INITIATE_HTTP(func):
             headers = [f"{k}: {v}\r\n" for k, v in kwargs["headers"].items()]
             kwargs["headers"] = "".join(headers)
         host, path_params = args[0].make_host_from_url(args[1])
-        print(host, path_params)
         ip = args[0].resolve(host)
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         return func(args[0], host, s, ip, path_params, **kwargs)
@@ -99,32 +99,25 @@ class HTTP:
                       f"Accept: */*\r\n" \
                       f"{headers if headers else ''}"  \
                       f"\r\n"
-        print(get_request)
         request = Request(s)
         response = request.send(get_request)
         return response
 
-    def post(self, host, data, headers=None):
-        if headers is None:
-            headers = {}
-        host, path_params = self.make_host_from_url(host)
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
-        ip = self.resolve(host)
-        converted_headers = [f"{k}: {v}" for k, v in headers.items()]
+    @INITIATE_HTTP
+    def post(self, host, s, ip, path_params, data, headers):
         s.connect((ip, 80))
+        data_string = json.dumps(data)
         post_request = f"POST /{path_params} HTTP/1.1\r\n" \
                        f"Host: {host}\r\n" \
                        f"User-Agent: {self.user_agent}\r\n" \
                        f"Accept: */*\r\n" \
-                       f"Content-Length: {len(data)}\r\n" \
-                       f"{converted_headers}" \
+                       f"Content-Length: {len(data_string)}\r\n" \
+                       f"{headers}" \
                        f"\r\n" \
-                       f"{data}"
-
+                       f"{data_string if data else ''}"
+        print(post_request)
         request = Request(s)
         response = request.send(post_request)
-
         return response
 
     def resolve(self, host):
