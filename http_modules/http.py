@@ -2,79 +2,15 @@
 import json
 import socket
 import dns
+from http_modules.request import Request
 
 
-class Response:
-    def __init__(self, header, body):
-        self.header = header
-        self.body = body
-        self.json = {}
-        self.status = ""
-        self.status_message = ""
-        self.headers = {}
-        self.parse_header()
-
-    def parse_header(self):
-        self.header = self.header.decode()
-        self.header = self.header.split("\r\n")
-        self.status = self.header[0].split(" ")[1]
-        self.status_message = self.header[0].split(" ")[2]
-        self.headers = {}
-        self.body = ""
-        for i in range(1, len(self.header)):
-            if self.header[i] == "":
-                break
-            else:
-                self.headers[self.header[i].split(": ")[0]] = self.header[i].split(": ")[1]
-
-    def parse_body(self, body):
-        if self.headers["Content-Type"].find("text/html") != -1:
-            self.body = body.decode()
-        elif self.headers["Content-Type"].find("application/json") != -1:
-            self.body = body.decode()
-            self.json = json.loads(self.body)
-        else:
-            self.body = body
-
-
-class Request:
-    def __init__(self, socket):
-        self.s = socket
-
-    def send(self, request):
-        chunk_size = 1024
-        self.s.send(request.encode())
-        response = b""
-        chunk = self.s.recv(chunk_size)
-        header = b""
-        header_counter = 0
-        while chunk:
-            header_counter += 1
-            if chunk.find("\r\n\r\n".encode()) != -1:
-                header += chunk.split("\r\n\r\n".encode())[0]
-                response += chunk.split("\r\n\r\n".encode())[1]
-                break
-            header += chunk
-            chunk = self.s.recv(chunk_size)
-
-        res = Response(header, response)
-        total_length = int(res.headers["Content-Length"])
-        remaining_bytes = total_length - len(response)
-        chunk_count = (remaining_bytes // chunk_size) + 1 if remaining_bytes // chunk_size != 0 else 0
-        for i in range(chunk_count):
-            # print(f"Remaining bytes: {remaining_bytes}")
-            chunk = self.s.recv(chunk_size)
-            response += chunk
-
-        self.s.close()
-        res.parse_body(response)
-        return res
-
-# Repetitive in all http requests
+# Repetitive in all http_modules requests
 # Decorator to set up common HTTP request initialization steps
 def INITIATE_HTTP(func):
     # Wrapper accepts original func arguments
     def wrapper(*args, **kwargs):
+
         # Set empty headers dict if not passed
         if kwargs.get("headers") is None:
             kwargs["headers"] = ""
@@ -88,17 +24,22 @@ def INITIATE_HTTP(func):
         # vitalize.dev/hello/world
         # host: vitalize.dev
         # path: /hello/world
+
         host, path_params = args[0].make_host_from_url(args[1])
 
         # Resolve host to IP address
+
         ip = args[0].resolve(host)
+
 
         # Create socket
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
         # Call the wrapped HTTP method
         return func(args[0], host, s, ip, path_params, **kwargs)
+
     return wrapper
+
 
 """
 User-Agent - An HTTP header used to identify details about the client user agent like browser name and version. 
@@ -135,18 +76,23 @@ PATCH – Apply partial modifications to a resource. Added later with RFC 5789.
 
 
 """
+
+
 class HTTP:
     def __init__(self):
+        self.ip = "0.0.0.0"
         self.user_agent = "f4ran-browser/1.0.0"
+        self.v = "1.1"
+        self.port = 80
 
     @INITIATE_HTTP
     def get(self, host, s, ip, path_params, headers):
-        s.connect((ip, 80))
-        get_request = f"GET /{path_params} HTTP/1.1\r\n" \
+        s.connect((ip, self.port))
+        get_request = f"GET /{path_params} HTTP/{self.v}\r\n" \
                       f"Host: {host}\r\n" \
-                      f"User-Agent: {self.user_agent}\r\n" \ 
+                      f"User-Agent: {self.user_agent}\r\n" \
                       f"Accept: */*\r\n" \
-                      f"{headers if headers else ''}"  \
+                      f"{headers if headers else ''}" \
                       f"\r\n"
         request = Request(s)
         response = request.send(get_request)
@@ -154,9 +100,9 @@ class HTTP:
 
     @INITIATE_HTTP
     def post(self, host, s, ip, path_params, data, headers):
-        s.connect((ip, 80))
+        s.connect((ip, self.port))
         data_string = json.dumps(data)
-        post_request = f"POST /{path_params} HTTP/1.1\r\n" \
+        post_request = f"POST /{path_params} HTTP/{self.v}\r\n" \
                        f"Host: {host}\r\n" \
                        f"User-Agent: {self.user_agent}\r\n" \
                        f"Accept: */*\r\n" \
@@ -171,9 +117,9 @@ class HTTP:
 
     @INITIATE_HTTP
     def put(self, host, s, ip, path_params, data, headers):
-        s.connect((ip, 80))
+        s.connect((ip, self.port))
         data_string = json.dumps(data)
-        put_request = f"PUT /{path_params} HTTP/1.1\r\n" \
+        put_request = f"PUT /{path_params} HTTP/{self.v}\r\n" \
                       f"Host: {host}\r\n" \
                       f"User-Agent: {self.user_agent}\r\n" \
                       f"Accept: */*\r\n" \
@@ -187,9 +133,9 @@ class HTTP:
 
     @INITIATE_HTTP
     def patch(self, host, s, ip, path_params, data, headers):
-        s.connect((ip, 80))
+        s.connect((ip, self.port))
         data_string = json.dumps(data)
-        patch_request = f"PATCH /{path_params} HTTP/1.1\r\n" \
+        patch_request = f"PATCH /{path_params} HTTP/{self.v}\r\n" \
                         f"Host: {host}\r\n" \
                         f"User-Agent: {self.user_agent}\r\n" \
                         f"Accept: */*\r\n" \
@@ -203,8 +149,8 @@ class HTTP:
 
     @INITIATE_HTTP
     def delete(self, host, s, ip, path_params, headers):
-        s.connect((ip, 80))
-        delete_request = f"DELETE /{path_params} HTTP/1.1\r\n" \
+        s.connect((ip, self.port))
+        delete_request = f"DELETE /{path_params} HTTP/{self.v}\r\n" \
                          f"Host: {host}\r\n" \
                          f"User-Agent: {self.user_agent}\r\n" \
                          f"Accept: */*\r\n" \
