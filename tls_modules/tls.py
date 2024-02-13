@@ -1,8 +1,10 @@
 import socket
 import os
 import struct
-
+from OpenSSL import crypto
 # Generate a random 32 byte string for the client hello random field
+
+
 client_hello_random = os.urandom(32)
 
 # Specify the TLS version - we will use TLS 1.2
@@ -68,6 +70,52 @@ full_client_hello = header + handshake_type + handshake_length + version + rando
 # Send client hello
 sock.send(full_client_hello)
 
-# Receive server hello
+
 server_hello = sock.recv(2048)
-print(server_hello)
+tls_remaining = sock.recv(2048)
+
+# Parse server hello
+handshake_type = server_hello[:1]
+version = server_hello[1:3]
+length = server_hello[3:5]
+random = server_hello[5:37]
+session_id_length = server_hello[37:38]
+session_id = server_hello[38:70]
+cipher_suite = server_hello[70:72]
+compression_method = server_hello[72:73]
+print(f"Handshake type: {handshake_type.hex()}")
+print(f"Version: {version.hex()}")
+print(f"Length: {length.hex()}")
+print(f"Random: {random.hex()}")
+print(f"Session ID length: {session_id_length.hex()}")
+print(f"Session ID: {session_id.hex()}")
+print(f"Cipher suite: {cipher_suite.hex()}")
+print(f"Compression method: {compression_method.hex()}")
+
+# Extract certificate
+# handshake_type = tls_remaining[:1]
+# length = tls_remaining[1:4]
+# tls_remaining = tls_remaining[4:]
+# print(f"Handshake type: {handshake_type.hex()}")
+# print(f"Length: {length.hex()}")
+# # Parse certificate
+# certificates = []
+# while len(tls_remaining) > 0:
+#     certificate_type = tls_remaining[:1]
+#     length = struct.unpack(">H", tls_remaining[1:3])[0]
+#     certificate = tls_remaining[3:3 + length]
+#     certificates.append(certificate)
+#     tls_remaining = tls_remaining[3 + length:]
+#
+# print(f"Certificates: {len(certificates)}")
+# for certificate in certificates:
+#     x509 = crypto.load_certificate(crypto.FILETYPE_ASN1, certificate)
+#     print(f"Subject: {x509.get_subject().CN}")
+#     print(f"Issuer: {x509.get_issuer().CN}")
+#     print(f"Serial: {x509.get_serial_number()}")
+#     print(f"Version: {x509.get_version()}")
+#     print(f"Signature: {x509.get_signature_algorithm()}")
+
+
+
+
