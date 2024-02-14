@@ -1,7 +1,9 @@
+import re
 import socket
 import os
 import struct
 from OpenSSL import crypto
+
 # Generate a random 32 byte string for the client hello random field
 
 
@@ -70,52 +72,73 @@ full_client_hello = header + handshake_type + handshake_length + version + rando
 # Send client hello
 sock.send(full_client_hello)
 
+# Receive in loop
+server_hello = b""
+while True:
+    chunk = sock.recv(2048)
+    server_hello += chunk
+    if len(chunk) < 2048:
+        break
 
-server_hello = sock.recv(2048)
-tls_remaining = sock.recv(2048)
+# Extract TLS records
+matches = re.finditer(b'\x16\x03\x03', server_hello)
+positions = [match.start() for match in matches]
+server_hello_parts = []
+for i in range(len(positions)):
+    start = positions[i]
+    if i < len(positions) - 1:
+        end = positions[i + 1]
+    else:
+        end = len(server_hello) - 1
+    server_hello_parts.append(server_hello[start:end])
 
-# Parse server hello
-handshake_type = server_hello[:1]
-version = server_hello[1:3]
-length = server_hello[3:5]
-random = server_hello[5:37]
-session_id_length = server_hello[37:38]
-session_id = server_hello[38:70]
-cipher_suite = server_hello[70:72]
-compression_method = server_hello[72:73]
-print(f"Handshake type: {handshake_type.hex()}")
-print(f"Version: {version.hex()}")
-print(f"Length: {length.hex()}")
-print(f"Random: {random.hex()}")
-print(f"Session ID length: {session_id_length.hex()}")
-print(f"Session ID: {session_id.hex()}")
-print(f"Cipher suite: {cipher_suite.hex()}")
-print(f"Compression method: {compression_method.hex()}")
+print(server_hello_parts[0][:10], server_hello_parts[1][:10], server_hello_parts[2][:10], server_hello_parts[3][:10])
 
-# Extract certificate
-# handshake_type = tls_remaining[:1]
-# length = tls_remaining[1:4]
-# tls_remaining = tls_remaining[4:]
-# print(f"Handshake type: {handshake_type.hex()}")
-# print(f"Length: {length.hex()}")
-# # Parse certificate
-# certificates = []
-# while len(tls_remaining) > 0:
-#     certificate_type = tls_remaining[:1]
-#     length = struct.unpack(">H", tls_remaining[1:3])[0]
-#     certificate = tls_remaining[3:3 + length]
-#     certificates.append(certificate)
-#     tls_remaining = tls_remaining[3 + length:]
-#
-# print(f"Certificates: {len(certificates)}")
-# for certificate in certificates:
-#     x509 = crypto.load_certificate(crypto.FILETYPE_ASN1, certificate)
-#     print(f"Subject: {x509.get_subject().CN}")
-#     print(f"Issuer: {x509.get_issuer().CN}")
-#     print(f"Serial: {x509.get_serial_number()}")
-#     print(f"Version: {x509.get_version()}")
-#     print(f"Signature: {x509.get_signature_algorithm()}")
+# Extract TLS records
+# \x16\x03\x03 is the record header for a TLS handshake
+tls_remaining = server_hello
+while len(tls_remaining) > 0:
+    index = tls_remaining.index(b"\x16\x03\x03")
+    tls_remaining = tls_remaining[index:]
+    ht = tls_remaining[5]
+    print(ht)
+    if ht == 0x02:
+        # Its server hello
+        length = tls_remaining[6:9]
+        version = tls_remaining[9:11]
+        random = tls_remaining[11:43]
+        session_id_length = tls_remaining[43:44]
+        session_id = tls_remaining[44:76]
+        cipher_suite = tls_remaining[76:78]
+        compression_method = tls_remaining[78:79]
+        tls_remaining = tls_remaining[79:]
+        print(
+            f"Server hello: {version.hex()} {random.hex()} {session_id_length.hex()} {session_id.hex()} {cipher_suite.hex()} {compression_method.hex()}")
+        continue
+    if ht == 0x0b:
+        # Its certificate
+        length = struct.unpack(">I", b"\x00" + tls_remaining[6:9])[0]
+        certificates = tls_remaining[9:9 + length]
+        tls_remaining = tls_remaining[9 + length:]
+        continue
+    elif ht == 0x0c:
+        # Its server key exchange
+        length = struct.unpack(">I", b"\x00" + tls_remaining[6:9])[0]
+        server_key_exchange = tls_remaining[9:9 + length]  # Deffie-Hellman Server Params
+        tls_remaining = tls_remaining[9 + length:]
+        continue
+    elif ht == 0x0e:
+        # Its server hello done
+        length = struct.unpack(">I", b"\x00" + tls_remaining[6:9])[0]
+        server_hello_done = tls_remaining[9:9 + length]
+        tls_remaining = tls_remaining[9 + length:]
+        print(tls_remaining)
+        continue
+    elif not ht:
+        print("No more records")
+        break
+    else:
+        print("Unknown record")
+        break
 
-
-
-
+print(certificates)
