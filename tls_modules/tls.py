@@ -1,8 +1,9 @@
 import re
 import socket
 import os
+import ssl
 import struct
-
+from OpenSSL import crypto
 # Generate a random 32 byte string for the client hello random field
 
 
@@ -145,19 +146,27 @@ while len(tls_remaining) > 0:
 certificates_remaining = certificates[3:]
 certificates_list = []
 while len(certificates_remaining) > 0:
-    print(certificates_remaining[:10].hex())
     length = struct.unpack(">I", b"\x00" + certificates_remaining[:3])[0]
     certificate = certificates_remaining[3:3 + length]
     certificates_list.append(certificate)
     certificates_remaining = certificates_remaining[3 + length:]
 
 
-# Extract signed certificate
-def extract_signed_certificate(certificate):
-    subject = certificate.index(b"\x30\x81\x96")
-    rdns = certificate[subject + 3:]
+# Load cert bytes into an X.509 object
 
+for c in certificates_list:
+    cert = crypto.load_certificate(crypto.FILETYPE_ASN1, c)
 
+    # Print some details from the cert
+    print(f"Issuer: {cert.get_issuer()}")
+    print(f"Subject: {cert.get_subject()}")
+    print(f"Serial Number: {cert.get_serial_number()}")
+    print(f"Version: {cert.get_version()}")
+    print(f"Validity Start: {cert.get_notBefore()}")
+    print(f"Validity End: {cert.get_notAfter()}")
+
+    # Validate hostname matches
+    hostname = 'www.example.org'
 
 
 
