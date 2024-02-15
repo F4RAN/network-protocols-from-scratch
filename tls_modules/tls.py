@@ -2,7 +2,6 @@ import re
 import socket
 import os
 import struct
-from OpenSSL import crypto
 
 # Generate a random 32 byte string for the client hello random field
 
@@ -97,6 +96,7 @@ print(server_hello_parts[0][:10], server_hello_parts[1][:10], server_hello_parts
 # Extract TLS records
 # \x16\x03\x03 is the record header for a TLS handshake
 tls_remaining = server_hello
+certificates = b""
 while len(tls_remaining) > 0:
     index = tls_remaining.index(b"\x16\x03\x03")
     tls_remaining = tls_remaining[index:]
@@ -141,4 +141,23 @@ while len(tls_remaining) > 0:
         print("Unknown record")
         break
 
-print(certificates)
+# Extract certificate
+certificates_remaining = certificates[3:]
+certificates_list = []
+while len(certificates_remaining) > 0:
+    print(certificates_remaining[:10].hex())
+    length = struct.unpack(">I", b"\x00" + certificates_remaining[:3])[0]
+    certificate = certificates_remaining[3:3 + length]
+    certificates_list.append(certificate)
+    certificates_remaining = certificates_remaining[3 + length:]
+
+
+# Extract signed certificate
+def extract_signed_certificate(certificate):
+    subject = certificate.index(b"\x30\x81\x96")
+    rdns = certificate[subject + 3:]
+
+
+
+
+
