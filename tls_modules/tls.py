@@ -6,7 +6,7 @@ import struct
 from OpenSSL import crypto
 # Generate a random 32 byte string for the client hello random field
 
-
+url = "example.org"
 client_hello_random = os.urandom(32)
 
 # Specify the TLS version - we will use TLS 1.2
@@ -16,7 +16,7 @@ tls_version = 0x0303
 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
 # Connect to server
-sock.connect(("example.com", 443))
+sock.connect((url, 443))
 
 # Handshake type - client hello
 handshake_type = struct.pack(">B", 0x01)
@@ -153,8 +153,8 @@ while len(certificates_remaining) > 0:
 
 
 # Load cert bytes into an X.509 object
-
-for c in certificates_list:
+hostname = url if url.startswith("www.") else "www." + url
+for index,c in enumerate(certificates_list):
     cert = crypto.load_certificate(crypto.FILETYPE_ASN1, c)
 
     # Print some details from the cert
@@ -166,7 +166,21 @@ for c in certificates_list:
     print(f"Validity End: {cert.get_notAfter()}")
 
     # Validate hostname matches
-    hostname = 'www.example.org'
+    if index == 0:
+        common_name = cert.get_subject().commonName
+        if common_name != hostname:
+            print(f"Common name {common_name} does not match hostname {hostname}")
+            exit(1)
+    else:
+        # Validate issuer matches previous cert subject
+        issuer = cert.get_issuer()
+        subject = crypto.load_certificate(crypto.FILETYPE_ASN1, certificates_list[index-1]).get_subject()
+        if issuer != subject:
+            print(f"Issuer {issuer} does not match subject {subject}")
+            exit(1)
+
+
+
 
 
 
