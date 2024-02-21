@@ -52,11 +52,11 @@ supported_groups_length = struct.pack(">H", len(supported_groups))
 
 # key_share
 ext4_type = struct.pack(">H", 0x0033)
-ext4_length = struct.pack(">H", 0x0047)
-key_share_length = struct.pack(">H", 0x0045)
+ext4_length = struct.pack(">H", 0x0038)
+key_share_length = struct.pack(">H", 0x0036)
 # key_share_entry
 ks_group = struct.pack(">H", 0x0017)
-key_exchange_length = struct.pack(">H", 0x0041)
+key_exchange_length = struct.pack(">H", 0x0032)
 private_key = ec.generate_private_key(ec.SECP256R1(), default_backend())
 public_key = private_key.public_key()
 key_exchange = struct.pack(">B", 0x04) + public_key.public_bytes(encoding=serialization.Encoding.X962,
@@ -64,10 +64,11 @@ key_exchange = struct.pack(">B", 0x04) + public_key.public_bytes(encoding=serial
 extensions_length = len(ext_type) + len(ext_length) + len(srv_name_list_length) + len(srv_name_type) + len(srv_name_length) + len(srv_name) + \
                     len(ext3_type) + len(ext3_length) + len(supported_groups_length) + len(supported_groups) + \
                     len(ext4_type) + len(ext4_length) + len(key_share_length) + len(ks_group) + len(key_exchange_length) + len(key_exchange)
+print(extensions_length)
 # extensions_length = 0x002b
 handshake_length = handshake_body_length + extensions_length
 header += struct.pack(">H", handshake_length - 6)  # Length of the handshake message
-extensions_length = struct.pack(">H", extensions_length)
+extensions_length = struct.pack(">H", extensions_length - 10)
 handshake_length = handshake_length - 6 - 5  # Length of the handshake message
 handshake = handshake_type + struct.pack(">I", handshake_length)[1:] + version + random + session_id_length + cs_length + cipher_suites_bytes + compression_methods_length + compression_methods + extensions_length + \
             ext_type + ext_length + srv_name_list_length + srv_name_type + srv_name_length + srv_name + \
