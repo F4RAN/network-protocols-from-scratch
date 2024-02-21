@@ -25,7 +25,7 @@ compression_methods_length = struct.pack(">B", 0x01)
 compression_methods = struct.pack(">B", 0x00)
 handshake_body_length = len(handshake_type) + len(version) + len(random) + len(session_id_length) + len(cs_length) + len(cipher_suites_bytes) + len(compression_methods) + len(compression_methods_length) + 3
 # Extensions
-extension_length = struct.pack(">H", 0x002b)
+
 # server_name example.org
 ext_type = struct.pack(">H", 0x0000)
 ext_length = struct.pack(">H", 0x0010)
@@ -42,11 +42,13 @@ srv_name = b"example.org"
 
 # supported_groups
 ext3_type = struct.pack(">H", 0x000a)
-ext3_length = struct.pack(">H", 0x0022)
-supported_groups_length = struct.pack(">H", 0x0020)
-supported_groups = struct.pack(f'>H', 0x001d) + struct.pack(f'>H', 0x0017) + struct.pack(f'>H', 0x0019) + \
+supported_groups = struct.pack(f'>H', 0x001d) + struct.pack(f'>H', 0x0017) + struct.pack(f'>H', 0x001e) + struct.pack(f'>H', 0x0019) + \
                    struct.pack(f'>H', 0x0018) + struct.pack(f'>H', 0x0100) + struct.pack(f'>H', 0x0101) + \
                    struct.pack(f'>H', 0x0102) + struct.pack(f'>H', 0x0103) + struct.pack(f'>H', 0x0104)
+
+ext3_length = struct.pack(">H", len(supported_groups) + 2)
+supported_groups_length = struct.pack(">H", len(supported_groups))
+
 
 # key_share
 ext4_type = struct.pack(">H", 0x0033)
@@ -59,13 +61,15 @@ private_key = ec.generate_private_key(ec.SECP256R1(), default_backend())
 public_key = private_key.public_key()
 key_exchange = struct.pack(">B", 0x04) + public_key.public_bytes(encoding=serialization.Encoding.X962,
                                                                  format=serialization.PublicFormat.UncompressedPoint)
-extentions_length = len(ext_type) + len(ext_length) + len(srv_name_list_length) + len(srv_name_type) + len(srv_name_length) + len(srv_name) + \
+extensions_length = len(ext_type) + len(ext_length) + len(srv_name_list_length) + len(srv_name_type) + len(srv_name_length) + len(srv_name) + \
                     len(ext3_type) + len(ext3_length) + len(supported_groups_length) + len(supported_groups) + \
                     len(ext4_type) + len(ext4_length) + len(key_share_length) + len(ks_group) + len(key_exchange_length) + len(key_exchange)
-handshake_length = handshake_body_length + extentions_length
+# extensions_length = 0x002b
+handshake_length = handshake_body_length + extensions_length
 header += struct.pack(">H", handshake_length - 6)  # Length of the handshake message
+extensions_length = struct.pack(">H", extensions_length)
 handshake_length = handshake_length - 6 - 5  # Length of the handshake message
-handshake = handshake_type + struct.pack(">I", handshake_length)[1:] + version + random + session_id_length + cs_length + cipher_suites_bytes + compression_methods_length + compression_methods + extension_length + \
+handshake = handshake_type + struct.pack(">I", handshake_length)[1:] + version + random + session_id_length + cs_length + cipher_suites_bytes + compression_methods_length + compression_methods + extensions_length + \
             ext_type + ext_length + srv_name_list_length + srv_name_type + srv_name_length + srv_name + \
             ext3_type + ext3_length + supported_groups_length + supported_groups + \
             ext4_type + ext4_length + key_share_length + ks_group + key_exchange_length + key_exchange
