@@ -60,7 +60,7 @@ key_exchange_length = struct.pack(">H", 0x0032)
 private_key = ec.generate_private_key(ec.SECP256R1(), default_backend())
 public_key = private_key.public_key()
 key_exchange = struct.pack(">B", 0x04) + public_key.public_bytes(encoding=serialization.Encoding.X962,
-                                                                 format=serialization.PublicFormat.UncompressedPoint)
+                                                                 format=serialization.PublicFormat.CompressedPoint)
 extensions_length = len(ext_type) + len(ext_length) + len(srv_name_list_length) + len(srv_name_type) + len(srv_name_length) + len(srv_name) + \
                     len(ext3_type) + len(ext3_length) + len(supported_groups_length) + len(supported_groups) + \
                     len(ext4_type) + len(ext4_length) + len(key_share_length) + len(ks_group) + len(key_exchange_length) + len(key_exchange)
@@ -74,9 +74,8 @@ handshake = handshake_type + struct.pack(">I", handshake_length)[1:] + version +
             ext_type + ext_length + srv_name_list_length + srv_name_type + srv_name_length + srv_name + \
             ext3_type + ext3_length + supported_groups_length + supported_groups + \
             ext4_type + ext4_length + key_share_length + ks_group + key_exchange_length + key_exchange
+print(key_exchange.hex(), key_exchange_length.hex(), len(key_exchange))
 # Preparing the message
-print(header.hex())
-print(handshake.hex())
 message = header + handshake
 # Sending the message to the server
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
