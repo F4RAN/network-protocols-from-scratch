@@ -110,11 +110,21 @@ print(ext5_type.hex(), ext5_length.hex(), key_share_length.hex(), ks_group.hex()
 # Preparing the message
 message = header + handshake
 # Sending the message to the server
-server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-server.connect(("yahoo.com", 443))
-print(server.getpeername())
-server.send(message)
-response = server.recv(1024)
-print(response)
-response2 = server.recv(1024)
-print(response2)
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+sock.connect(("yahoo.com", 443))
+print(sock.getpeername())
+sock.send(message)
+
+
+# Receiving the response from the sock
+server_hello = b""
+while True:
+    chunk = sock.recv(2048)
+    server_hello += chunk
+    if len(chunk) < 2048:
+        break
+
+# Closing the connection
+sock.close()
+
+# Parsing the server hello message
